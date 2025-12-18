@@ -43,6 +43,7 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
     // Google Nearby Connections
     implementation("com.google.android.gms:play-services-nearby:19.0.0")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 
     // Firebase (Database & Auth)
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))

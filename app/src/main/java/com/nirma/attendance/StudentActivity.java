@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
 
 public class StudentActivity extends AppCompatActivity {
 
-    private static final String SERVICE_ID = "com.nirma.attendance"; // MUST MATCH PROFESSOR
+    private static final String SERVICE_ID = "com.nirma.attendance";
     private EditText etRollNo;
     private TextView statusLog;
     private Button btnScan;
@@ -39,13 +39,37 @@ public class StudentActivity extends AppCompatActivity {
                 return;
             }
             if (hasPermissions()) {
-                startDiscovery();
+                // Check if GPS is ON before scanning
+                checkLocationEnabled();
             } else {
                 requestPermissions();
             }
         });
     }
 
+    // --- 1. GPS CHECKER (The "Foolproof" Method) ---
+    private void checkLocationEnabled() {
+        android.location.LocationManager lm = (android.location.LocationManager) getSystemService(android.content.Context.LOCATION_SERVICE);
+        boolean gps_enabled = false;
+
+        try {
+            gps_enabled = lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
+        } catch(Exception ex) {}
+
+        if(!gps_enabled) {
+            new android.app.AlertDialog.Builder(this)
+                    .setMessage("Please turn on GPS Location to mark attendance.")
+                    .setPositiveButton("Open Settings", (paramDialogInterface, paramInt) -> {
+                        startActivity(new android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        } else {
+            startDiscovery();
+        }
+    }
+
+    // --- 2. DISCOVERY LOGIC ---
     private void startDiscovery() {
         statusLog.setText("Looking for Professor...");
         DiscoveryOptions options = new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
@@ -56,12 +80,10 @@ public class StudentActivity extends AppCompatActivity {
                 .addOnFailureListener((Exception e) -> statusLog.setText("Scan Failed: " + e.getMessage()));
     }
 
-    // 1. Found the Professor
     private final EndpointDiscoveryCallback endpointDiscoveryCallback = new EndpointDiscoveryCallback() {
         @Override
         public void onEndpointFound(@NonNull String endpointId, @NonNull DiscoveredEndpointInfo info) {
             statusLog.setText("Found: " + info.getEndpointName() + ". Connecting...");
-            // Request Connection
             Nearby.getConnectionsClient(getApplicationContext())
                     .requestConnection("Student", endpointId, connectionLifecycleCallback);
         }
@@ -69,11 +91,9 @@ public class StudentActivity extends AppCompatActivity {
         public void onEndpointLost(@NonNull String endpointId) {}
     };
 
-    // 2. Connection Lifecycle
     private final ConnectionLifecycleCallback connectionLifecycleCallback = new ConnectionLifecycleCallback() {
         @Override
         public void onConnectionInitiated(@NonNull String endpointId, @NonNull ConnectionInfo info) {
-            // Auto-Accept
             Nearby.getConnectionsClient(getApplicationContext()).acceptConnection(endpointId, payloadCallback);
         }
 
@@ -87,7 +107,6 @@ public class StudentActivity extends AppCompatActivity {
         public void onDisconnected(@NonNull String endpointId) {}
     };
 
-    // 3. Send Data (Roll No + Unique Device ID)
     private void sendAttendanceData(String endpointId) {
         String rollNo = etRollNo.getText().toString();
         String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -98,7 +117,6 @@ public class StudentActivity extends AppCompatActivity {
         statusLog.setText("Sending Data...");
     }
 
-    // 4. Receive Confirmation
     private final PayloadCallback payloadCallback = new PayloadCallback() {
         @Override
         public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
@@ -112,43 +130,28 @@ public class StudentActivity extends AppCompatActivity {
         public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate update) {}
     };
 
-    // Permissions (Same as Professor)
-    // ---------------------------------------------------------
-    // UPDATED PERMISSION LOGIC FOR ANDROID 13 (API 33) FIX
-    // ---------------------------------------------------------
-
-    // ---------------------------------------------------------
-    // FINAL PERMISSION FIX (INCLUDES COARSE LOCATION)
-    // ---------------------------------------------------------
-
+    // --- 3. PERMISSIONS (Android 13 Fix) ---
     private boolean hasPermissions() {
-        // Base checks for Location (Both Fine and Coarse are needed for stability)
         boolean locationPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
 
-        // Android 13+ (API 33)
         if (Build.VERSION.SDK_INT >= 33) {
             return locationPermission &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
-        }
-        // Android 12 (API 31/32)
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return locationPermission &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) == PackageManager.PERMISSION_GRANTED &&
                     ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
-        }
-        // Android 11 and below
-        else {
+        } else {
             return locationPermission;
         }
     }
 
     private void requestPermissions() {
-        // Android 13+ (API 33)
         if (Build.VERSION.SDK_INT >= 33) {
             ActivityCompat.requestPermissions(this, new String[]{
                     Manifest.permission.NEARBY_WIFI_DEVICES,
@@ -156,24 +159,20 @@ public class StudentActivity extends AppCompatActivity {
                     Manifest.permission.BLUETOOTH_ADVERTISE,
                     Manifest.permission.BLUETOOTH_CONNECT,
                     Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION // Added
+                    Manifest.permission.ACCESS_COARSE_LOCATION
             }, 100);
-        }
-        // Android 12
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ActivityCompat.requestPermissions(this, new String[]{
                     Manifest.permission.BLUETOOTH_SCAN,
                     Manifest.permission.BLUETOOTH_ADVERTISE,
                     Manifest.permission.BLUETOOTH_CONNECT,
                     Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION // Added
+                    Manifest.permission.ACCESS_COARSE_LOCATION
             }, 100);
-        }
-        // Android 11 and below
-        else {
+        } else {
             ActivityCompat.requestPermissions(this, new String[]{
                     Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION // Added
+                    Manifest.permission.ACCESS_COARSE_LOCATION
             }, 100);
         }
     }

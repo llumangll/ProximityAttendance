@@ -3,44 +3,54 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="24dp"
+    android:padding="20dp"
     android:gravity="center_horizontal">
 
     <TextView
-        android:id="@+id/statusText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Status: Idle"
-        android:textSize="18sp"
-        android:layout_marginBottom="20dp"/>
+        android:text="Professor Dashboard"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="30dp"/>
 
     <Button
         android:id="@+id/btnStart"
         android:layout_width="match_parent"
         android:layout_height="60dp"
         android:text="Start Attendance Session"
-        android:backgroundTint="#2196F3"/>
+        android:backgroundTint="#2196F3"
+        android:layout_marginBottom="10dp"/>
+
+    <Button
+        android:id="@+id/btnStop"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="Stop Session"
+        android:backgroundTint="#F44336"
+        android:layout_marginBottom="20dp"/>
 
     <TextView
-        android:id="@+id/countText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Students: 0"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:layout_marginTop="30dp"/>
-
-    <ScrollView
+        android:id="@+id/statusText"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginTop="10dp"
-        android:background="#F0F0F0"
-        android:padding="10dp">
-        <TextView
-            android:id="@+id/logText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Waiting for start..."
-            android:fontFamily="monospace"/>
-    </ScrollView>
+        android:layout_height="wrap_content"
+        android:text="Status: Idle"
+        android:textAlignment="center"
+        android:textSize="18sp"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Present Students:"
+        android:textStyle="bold"
+        android:layout_marginTop="10dp"/>
+
+    <ListView
+        android:id="@+id/studentListView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#F0F0F0"/>
+
 </LinearLayout>
