@@ -88,13 +88,26 @@ public class ProfessorActivity extends AppCompatActivity {
         try {
             OutputStream outputStream = getContentResolver().openOutputStream(uri);
             StringBuilder sb = new StringBuilder();
+
+            // Header
             sb.append("Roll Number,Timestamp\n");
+
             for (String student : studentList) {
-                String cleanName = student.replace("\n", " ").replace(",", " ");
-                sb.append(cleanName).append("\n");
+                // student string looks like: "21BCE045\n(Device: abc) @ 10:30:45"
+
+                // 1. Split into Name and Time
+                String[] parts = student.split(" @ ");
+
+                String namePart = parts[0].replace("\n", " ").replace(",", " "); // Clean up name
+                String timePart = (parts.length > 1) ? parts[1] : ""; // Get time if it exists
+
+                // 2. Write: Name,Time
+                sb.append(namePart).append(",").append(timePart).append("\n");
             }
+
             outputStream.write(sb.toString().getBytes());
             outputStream.close();
+
             Toast.makeText(this, "Saved Successfully!", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(this, "Error saving file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -157,11 +170,17 @@ public class ProfessorActivity extends AppCompatActivity {
         @Override
         public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
             String data = new String(payload.asBytes(), StandardCharsets.UTF_8);
-            studentList.add(data);
+
+            // CHANGED: "hh:mm:ss a" gives "12:00:24 AM" instead of "00:00:24"
+            String time = new SimpleDateFormat("hh:mm:ss a", Locale.getDefault()).format(new Date());
+
+            studentList.add(data + " @ " + time);
             adapter.notifyDataSetChanged();
+
             Payload response = Payload.fromBytes("SUCCESS".getBytes(StandardCharsets.UTF_8));
             Nearby.getConnectionsClient(getApplicationContext()).sendPayload(endpointId, response);
         }
+
         @Override
         public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate update) {}
     };
