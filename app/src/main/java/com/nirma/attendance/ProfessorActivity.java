@@ -1,7 +1,10 @@
 package com.nirma.attendance;
 
 import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -16,13 +19,17 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.google.android.gms.nearby.Nearby;
 import com.google.android.gms.nearby.connection.*;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 
 public class ProfessorActivity extends AppCompatActivity {
 
     private static final String SERVICE_ID = "com.nirma.attendance";
-    private Button btnStart, btnStop;
+    private Button btnStart, btnStop, btnExport; // Defined correctly at top
     private TextView statusText;
     private ListView studentListView;
     private ArrayList<String> studentList;
@@ -35,6 +42,7 @@ public class ProfessorActivity extends AppCompatActivity {
 
         btnStart = findViewById(R.id.btnStart);
         btnStop = findViewById(R.id.btnStop);
+        btnExport = findViewById(R.id.btnExport); // Initialized here
         statusText = findViewById(R.id.statusText);
         studentListView = findViewById(R.id.studentListView);
 
@@ -44,7 +52,6 @@ public class ProfessorActivity extends AppCompatActivity {
 
         btnStart.setOnClickListener(v -> {
             if (hasPermissions()) {
-                // Check GPS before starting
                 checkLocationEnabled();
             } else {
                 requestPermissions();
@@ -57,13 +64,57 @@ public class ProfessorActivity extends AppCompatActivity {
             statusText.setText("Status: Stopped");
             Toast.makeText(this, "Session Stopped", Toast.LENGTH_SHORT).show();
         });
+
+        btnExport.setOnClickListener(v -> {
+            if (studentList.isEmpty()) {
+                Toast.makeText(this, "No students to export!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            createFile();
+        });
     }
 
-    // --- 1. GPS CHECKER (The "Foolproof" Method) ---
+    // --- CSV EXPORT LOGIC ---
+    private void createFile() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/csv");
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(new Date());
+        intent.putExtra(Intent.EXTRA_TITLE, "Attendance_" + timeStamp + ".csv");
+        startActivityForResult(intent, 4001);
+    }
+
+    private void writeCSV(Uri uri) {
+        try {
+            OutputStream outputStream = getContentResolver().openOutputStream(uri);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Roll Number,Timestamp\n");
+            for (String student : studentList) {
+                String cleanName = student.replace("\n", " ").replace(",", " ");
+                sb.append(cleanName).append("\n");
+            }
+            outputStream.write(sb.toString().getBytes());
+            outputStream.close();
+            Toast.makeText(this, "Saved Successfully!", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error saving file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 4001 && resultCode == Activity.RESULT_OK) {
+            if (data != null && data.getData() != null) {
+                writeCSV(data.getData());
+            }
+        }
+    }
+
+    // --- GPS CHECKER ---
     private void checkLocationEnabled() {
         android.location.LocationManager lm = (android.location.LocationManager) getSystemService(android.content.Context.LOCATION_SERVICE);
         boolean gps_enabled = false;
-
         try {
             gps_enabled = lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER);
         } catch(Exception ex) {}
@@ -81,7 +132,7 @@ public class ProfessorActivity extends AppCompatActivity {
         }
     }
 
-    // --- 2. ADVERTISING LOGIC ---
+    // --- ADVERTISING LOGIC ---
     private void startAdvertising() {
         AdvertisingOptions options = new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
 
@@ -94,13 +145,10 @@ public class ProfessorActivity extends AppCompatActivity {
     private final ConnectionLifecycleCallback connectionLifecycleCallback = new ConnectionLifecycleCallback() {
         @Override
         public void onConnectionInitiated(@NonNull String endpointId, @NonNull ConnectionInfo info) {
-            // Automatically accept any student
             Nearby.getConnectionsClient(getApplicationContext()).acceptConnection(endpointId, payloadCallback);
         }
-
         @Override
         public void onConnectionResult(@NonNull String endpointId, @NonNull ConnectionResolution result) {}
-
         @Override
         public void onDisconnected(@NonNull String endpointId) {}
     };
@@ -109,21 +157,16 @@ public class ProfessorActivity extends AppCompatActivity {
         @Override
         public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
             String data = new String(payload.asBytes(), StandardCharsets.UTF_8);
-
-            // Add student to the list
             studentList.add(data);
             adapter.notifyDataSetChanged();
-
-            // Send "SUCCESS" back to Student
             Payload response = Payload.fromBytes("SUCCESS".getBytes(StandardCharsets.UTF_8));
             Nearby.getConnectionsClient(getApplicationContext()).sendPayload(endpointId, response);
         }
-
         @Override
         public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate update) {}
     };
 
-    // --- 3. PERMISSIONS (Android 13 Fix) ---
+    // --- PERMISSIONS ---
     private boolean hasPermissions() {
         boolean locationPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
