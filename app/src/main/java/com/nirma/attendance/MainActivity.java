@@ -23,7 +23,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         btnStudent.setOnClickListener(v -> {
-            Toast.makeText(MainActivity.this, "Student Mode Selected", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(MainActivity.this, StudentActivity.class);
+            startActivity(intent);
         });
     }
 }
