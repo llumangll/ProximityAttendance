@@ -18,7 +18,8 @@ public class MainActivity extends AppCompatActivity {
         Button btnStudent = findViewById(R.id.btnStudent);
 
         btnProf.setOnClickListener(v -> {
-            Toast.makeText(MainActivity.this, "Professor Mode Selected", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(MainActivity.this, ProfessorActivity.class);
+            startActivity(intent);
         });
 
         btnStudent.setOnClickListener(v -> {
