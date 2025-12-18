@@ -71,6 +71,9 @@ public class StudentActivity extends AppCompatActivity {
 
     // --- 2. DISCOVERY LOGIC ---
     private void startDiscovery() {
+        // FIX: Always stop previous scan first to avoid "Status Already Discovering" (8002)
+        Nearby.getConnectionsClient(this).stopDiscovery();
+
         statusLog.setText("Looking for Professor...");
         DiscoveryOptions options = new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_STAR).build();
 
@@ -107,14 +110,16 @@ public class StudentActivity extends AppCompatActivity {
         public void onDisconnected(@NonNull String endpointId) {}
     };
 
+    // UPDATED: This now asks the Server FIRST before bothering the Professor
     private void sendAttendanceData(String endpointId) {
         String rollNo = etRollNo.getText().toString();
         String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
-        String data = rollNo + "\n(Device: " + deviceId.substring(0,6) + ")";
 
-        Payload payload = Payload.fromBytes(data.getBytes(StandardCharsets.UTF_8));
-        Nearby.getConnectionsClient(this).sendPayload(endpointId, payload);
-        statusLog.setText("Sending Data...");
+        statusLog.setText("Verifying with Server...");
+
+        // Start the check.
+        // If SERVER says "Success" -> It will automatically call sendPayloadToProfessor
+        checkAttendanceWithServer(rollNo, deviceId, endpointId);
     }
 
     private final PayloadCallback payloadCallback = new PayloadCallback() {
@@ -175,5 +180,58 @@ public class StudentActivity extends AppCompatActivity {
                     Manifest.permission.ACCESS_COARSE_LOCATION
             }, 100);
         }
+    }
+
+    // --- 4. SERVER CONNECTION (UPDATED FIX) ---
+    private void checkAttendanceWithServer(String uid, String devId, String endpointId) {
+        new Thread(() -> {
+            try {
+                // Your Laptop IP (Make sure this is correct!)
+                String serverIp = "192.168.1.8";
+                String path = "http://" + serverIp + ":8080/api/mark?uid=" + uid + "&devId=" + devId;
+
+                java.net.URL url = new java.net.URL(path);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+
+                java.util.Scanner sc = new java.util.Scanner(conn.getInputStream());
+                if (sc.hasNext()) {
+                    String response = sc.nextLine();
+
+                    runOnUiThread(() -> {
+                        // Show server message (Success or Error)
+                        Toast.makeText(StudentActivity.this, response, Toast.LENGTH_LONG).show();
+                        statusLog.setText(response);
+
+                        if (response.toLowerCase().contains("success")) {
+                            // ✅ CASE 1: SUCCESS - Send data to Professor
+                            sendPayloadToProfessor(uid, devId, endpointId);
+                        } else {
+                            // ❌ CASE 2: ERROR (Duplicate/Proxy) - DISCONNECT IMMEDIATELY
+                            // This fixes the issue of getting stuck
+                            Nearby.getConnectionsClient(StudentActivity.this).disconnectFromEndpoint(endpointId);
+                            statusLog.setText(response + " (Disconnected)");
+                        }
+                    });
+                }
+                conn.disconnect();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    Toast.makeText(StudentActivity.this, "Server Error", Toast.LENGTH_SHORT).show();
+                    // Safe to disconnect here too
+                    Nearby.getConnectionsClient(StudentActivity.this).disconnectFromEndpoint(endpointId);
+                });
+            }
+        }).start();
+    }
+
+    private void sendPayloadToProfessor(String rollNo, String deviceId, String endpointId) {
+        String data = rollNo + "\n(Device: " + deviceId.substring(0,6) + ")";
+        Payload payload = Payload.fromBytes(data.getBytes(StandardCharsets.UTF_8));
+
+        Nearby.getConnectionsClient(this).sendPayload(endpointId, payload);
+        statusLog.setText("✅ Verified & Sent to Prof!");
     }
 }
